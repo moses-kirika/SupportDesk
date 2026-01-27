@@ -1,0 +1,177 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Multi-tenant organization model
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users       User[]
+  tickets     Ticket[]
+  comments    Comment[]
+  attachments Attachment[]
+
+  @@map("organizations")
+}
+
+// User model with role-based access
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  firstName      String
+  lastName       String
+  role           UserRole @default(USER)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdTickets   Ticket[]     @relation("TicketCreator")
+  assignedTickets  Ticket[]     @relation("AssignedTechnician")
+  comments         Comment[]
+  uploadedFiles    Attachment[]
+  notifications    Notification[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("users")
+}
+
+// Ticket model
+model Ticket {
+  id             String         @id @default(uuid())
+  title          String
+  description    String
+  category       String
+  priority       TicketPriority @default(MEDIUM)
+  status         TicketStatus   @default(OPEN)
+  
+  organizationId String
+  createdById    String
+  assignedToId   String?
+  
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  // Relations
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator            User         @relation("TicketCreator", fields: [createdById], references: [id])
+  assignedTechnician User?        @relation("AssignedTechnician", fields: [assignedToId], references: [id])
+  comments           Comment[]
+  attachments        Attachment[]
+  notifications      Notification[]
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@map("tickets")
+}
+
+// Comment model for ticket conversations
+model Comment {
+  id             String   @id @default(uuid())
+  content        String
+  ticketId       String
+  userId         String
+  organizationId String
+  
+  createdAt DateTime @default(now())
+
+  // Relations
+  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([organizationId])
+  @@map("comments")
+}
+
+// Attachment model for file uploads
+model Attachment {
+  id             String   @id @default(uuid())
+  filename       String
+  url            String
+  fileType       String
+  fileSize       Int
+  
+  ticketId       String
+  uploadedById   String
+  organizationId String
+  
+  createdAt DateTime @default(now())
+
+  // Relations
+  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploader     User         @relation(fields: [uploadedById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([organizationId])
+  @@map("attachments")
+}
+
+// Notification model for email alerts
+model Notification {
+  id          String           @id @default(uuid())
+  type        NotificationType
+  recipientId String
+  ticketId    String?
+  read        Boolean          @default(false)
+  
+  createdAt DateTime @default(now())
+
+  // Relations
+  recipient User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  ticket    Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@map("notifications")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  TECHNICIAN
+  USER
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum NotificationType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  STATUS_CHANGED
+  NEW_COMMENT
+  TICKET_RESOLVED
+}
